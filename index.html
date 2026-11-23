@@ -31,7 +31,7 @@ grant insert on public.respostas to anon;
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Convite ♥</title>
+<title>Flores pra você</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
@@ -320,14 +320,27 @@ async function intro() {
 }
 intro();
 
-let tries = 0;
+let tries = 0, lastFlee = 0;
 const no = $('no');
+const blockTouch = e => e.preventDefault();
 function flee(e) {
   if (e) e.preventDefault();
+  lastFlee = performance.now();
   tries++;
-  if (tries >= NO_TEXT.length) { no.textContent = 'tá bom, sim'; no.onclick = accept; no.removeEventListener('pointerdown', flee); return; }
+  if (tries >= NO_TEXT.length) {
+    no.textContent = 'tá bom, sim';
+    no.removeEventListener('pointerdown', flee);
+    no.removeEventListener('touchstart', blockTouch);
+    setTimeout(() => { no.onclick = accept; }, 400);
+    return;
+  }
   const r = no.getBoundingClientRect();
-  if (!no.classList.contains('run')) { no.style.left = r.left + 'px'; no.style.top = r.top + 'px'; no.classList.add('run'); no.offsetWidth; }
+  if (!no.classList.contains('run')) {
+    const ph = document.createElement('span');          // segura o lugar: o "sim" não cresce pra baixo do dedo
+    ph.style.cssText = `flex:none;width:${r.width}px`;
+    no.after(ph);
+    no.style.left = r.left + 'px'; no.style.top = r.top + 'px'; no.classList.add('run'); no.offsetWidth;
+  }
   no.textContent = NO_TEXT[tries];
   const bw = no.offsetWidth, bh = no.offsetHeight, pad = 16;
   no.style.left = pad + Math.random() * (innerWidth - bw - pad * 2) + 'px';
@@ -335,6 +348,7 @@ function flee(e) {
   $('hint').textContent = tries > 2 ? 'esse botão tá meio tímido…' : '';
 }
 no.addEventListener('pointerdown', flee);
+no.addEventListener('touchstart', blockTouch, { passive: false });
 no.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') flee(e); });
 
 let done = false;
@@ -350,12 +364,12 @@ async function accept() {
   no.style.display = 'none';
   startFlow();
 }
-$('yes').addEventListener('click', accept);
+$('yes').addEventListener('click', () => { if (performance.now() - lastFlee > 600) accept(); });
 
 /* ---------- marcar: horário → lugar → mensagem ---------- */
 const CONFIG = {
   supabaseUrl: 'https://qlljdatgtxewzczqpyka.supabase.co',         // ex: https://abcd1234.supabase.co
-  supabaseKey: 'sb_publishable_WiWZbit7KjISgG_cPklneQ_KS1QiY4O' // anon / publishable key (nunca a service_role)
+  supabaseKey: 'COLE_AQUI_A_CHAVE_PUBLICA' // anon / publishable key (nunca a service_role)
 };
 const DAY = 'sexta, 27/11';
 const TIMES = ['19:00', '20:00', '21:00'];
@@ -393,7 +407,7 @@ function stepTime() {
 
 function stepPlace() {
   show(`<p class="k">Sexta, 27/11 · ${st.time}</p>
-    <h2 class="h2">E onde vamos?</h2>
+    <h2 class="h2">E onde a gente vai?</h2>
     ${PLACES.map(p => `<button class="place ph" data-p="${p.id}" aria-pressed="${st.place === p.id}"><span><strong>${p.name}</strong><small>${p.tag}</small></span></button>`).join('')}
     <div class="row"><button class="yes" id="go2" ${st.place ? '' : 'disabled'}>confirmar</button></div>
     <button class="linkbtn" id="back1">← trocar horário</button>`);
@@ -420,9 +434,9 @@ async function stepDone() {
   show(`<h2 class="h2">Só um segundo…</h2>`);
   try {
     await save();
-    show(`<h2 class="h2">Então está marcado! ♥</h2>
+    show(`<h2 class="h2">Então está marcado ♥</h2>
       <p class="sum">Sexta, 27/11\n${st.time}\n${placeLabel()}</p>
-      <p class="small">Já fiquei sabendo. Te vejo lá, meu amor :)♥</p>`);
+      <p class="small">Já fiquei sabendo. Te vejo lá.</p>`);
     boost = 4; viewT = .35;
   } catch (e) {
     show(`<h2 class="h2">Ops, não salvou.</h2>
