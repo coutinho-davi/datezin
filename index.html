@@ -31,7 +31,7 @@ grant insert on public.respostas to anon;
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Flores pra você</title>
+<title>Convite ♥</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
@@ -393,7 +393,7 @@ function stepTime() {
 
 function stepPlace() {
   show(`<p class="k">Sexta, 27/11 · ${st.time}</p>
-    <h2 class="h2">E onde a gente vai?</h2>
+    <h2 class="h2">E onde vamos?</h2>
     ${PLACES.map(p => `<button class="place ph" data-p="${p.id}" aria-pressed="${st.place === p.id}"><span><strong>${p.name}</strong><small>${p.tag}</small></span></button>`).join('')}
     <div class="row"><button class="yes" id="go2" ${st.place ? '' : 'disabled'}>confirmar</button></div>
     <button class="linkbtn" id="back1">← trocar horário</button>`);
@@ -420,9 +420,9 @@ async function stepDone() {
   show(`<h2 class="h2">Só um segundo…</h2>`);
   try {
     await save();
-    show(`<h2 class="h2">Então está marcado ♥</h2>
+    show(`<h2 class="h2">Então está marcado! ♥</h2>
       <p class="sum">Sexta, 27/11\n${st.time}\n${placeLabel()}</p>
-      <p class="small">Já fiquei sabendo. Te vejo lá.</p>`);
+      <p class="small">Já fiquei sabendo. Te vejo lá, meu amor :)♥</p>`);
     boost = 4; viewT = .35;
   } catch (e) {
     show(`<h2 class="h2">Ops, não salvou.</h2>
