@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<!--
+-- Rode no Supabase: SQL Editor > New query > cole tudo > Run
+
+create table if not exists public.respostas (
+  id             bigint generated always as identity primary key,
+  created_at     timestamptz not null default now(),
+  dia            date        not null,
+  horario        text        not null,
+  lugar          text        not null,
+  tentativas_nao int         not null default 0
+);
+
+alter table public.respostas enable row level security;
+
+-- A página só consegue INSERIR. Sem policy de select: ninguém de fora lê as respostas.
+drop policy if exists "pagina insere resposta" on public.respostas;
+create policy "pagina insere resposta"
+  on public.respostas
+  for insert
+  to anon
+  with check (
+    horario in ('19:00', '20:00', '21:00')
+    and lugar in ('Josephine', 'The View', 'Balcone', 'Bráz Quintal')
+    and tentativas_nao between 0 and 50
+  );
+
+grant insert on public.respostas to anon;
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Flores pra você</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: tender, playful, a little nerdy — a love note typed into a terminal
+   IDEA: the page behaves like a terminal window running bouquet3d.py at night
+   PICTURE: full-screen rotating 3D ASCII bouquet, truecolor, twinkling stars
+   COLOUR and TYPE: near-black ink-blue night, petal pink accent, warm white text; JetBrains Mono only
+   LAYOUT: bouquet fills the top ~60%; invite types itself in a calm column at the bottom; buttons last */
+:root{color-scheme:dark;--bg:#0b0b14;--ink:#f3eef6;--dim:#9a93a8;--pink:#ff6eaa;--pink2:#ffb3d1}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "JetBrains Mono",ui-monospace,Menlo,monospace;overflow:hidden;-webkit-tap-highlight-color:transparent}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.note{position:fixed;left:0;right:0;bottom:0;padding:28px max(6vw,20px) calc(28px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,rgba(11,11,20,.96) 55%,rgba(11,11,20,.75) 80%,rgba(11,11,20,0));
+  max-width:560px;margin:0 auto}
+.line{margin:0;color:var(--dim);font-size:15px;min-height:1.55em;white-space:pre-wrap}
+.line .p{color:var(--pink)}
+.ask{margin:10px 0 0;font-size:clamp(28px,8vw,40px);line-height:1.08;font-weight:800;color:var(--ink);text-wrap:balance;min-height:1.1em}
+.cur{display:inline-block;width:.55em;height:1em;background:var(--pink);vertical-align:-.12em;margin-left:2px;animation:b 1s steps(1) infinite}
+@keyframes b{50%{opacity:0}}
+.btns{display:flex;gap:12px;margin-top:22px;opacity:0;transform:translateY(8px);transition:opacity .5s,transform .5s;pointer-events:none}
+.btns.on{opacity:1;transform:none;pointer-events:auto}
+button{font:700 17px "JetBrains Mono",monospace;min-height:52px;padding:0 26px;border-radius:14px;cursor:pointer;touch-action:manipulation}
+button:focus-visible{outline:2px solid var(--pink2);outline-offset:3px}
+.yes{background:var(--pink);color:#2a0716;border:0;flex:1;box-shadow:0 8px 30px rgba(255,110,170,.35)}
+.yes:active{transform:scale(.97)}
+.no{background:transparent;color:var(--ink);border:1.5px solid rgba(243,238,246,.35);white-space:nowrap;transition:left .25s ease,top .25s ease}
+.no.run{position:fixed;z-index:5;background:rgba(11,11,20,.85)}
+.hint{margin:14px 0 0;font-size:13px;color:var(--dim);min-height:1.3em}
+.note.sheet{max-height:min(76vh,700px);overflow-y:auto;overscroll-behavior:contain;background:rgba(11,11,20,.95);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:22px 22px 0 0;border-top:1px solid rgba(255,255,255,.08)}
+.flow[hidden]{display:none}
+.flow{margin-top:18px;animation:in .5s ease both}
+@keyframes in{from{opacity:0;transform:translateY(10px)}}
+.k{margin:0;font-size:13px;color:var(--dim)}.k b{color:var(--pink);font-weight:700}
+.h2{margin:4px 0 16px;font-size:clamp(24px,7vw,32px);line-height:1.1;font-weight:800;text-wrap:balance}
+.chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.chip{min-height:50px;padding:0;border-radius:12px;background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.14);color:var(--ink)}
+.chip[aria-pressed=true]{background:var(--pink);border-color:var(--pink);color:#2a0716}
+.place{border:1.5px solid rgba(255,255,255,.12);border-radius:16px;margin-bottom:10px;background:rgba(255,255,255,.03);transition:border-color .2s}
+.place[aria-pressed=true]{border-color:var(--pink);background:rgba(255,110,170,.12)}
+.ph{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;background:none;border:0;border-radius:16px;color:var(--ink);text-align:left;padding:14px 16px;min-height:64px;font-weight:400}
+.ph strong{display:block;font-size:17px}.ph small{display:block;color:var(--dim);font-size:13px;line-height:1.4;margin-top:2px}
+
+button.place{border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);margin-bottom:10px}
+button.place[aria-pressed=true]{border-color:var(--pink);background:rgba(255,110,170,.14)}
+.row{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}.row>*{flex:1 1 140px}
+.ghost{background:transparent;color:var(--ink);border:1.5px solid rgba(243,238,246,.3)}
+button[disabled]{opacity:.35;cursor:not-allowed;box-shadow:none}
+.sum{margin:0;padding:16px;border:1.5px dashed rgba(255,110,170,.55);border-radius:16px;font-size:16px;line-height:1.7;white-space:pre-line}
+a.btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 22px;border-radius:14px;text-decoration:none;font:700 17px "JetBrains Mono",monospace}
+a.btn.yes{color:#2a0716}a.btn.ghost{color:var(--ink)}
+.small{font-size:13px;color:var(--dim);margin:12px 0 0}
+.linkbtn{background:none;border:0;color:var(--dim);font-size:14px;font-weight:400;text-decoration:underline;padding:0;min-height:44px}
+@media (prefers-reduced-motion:reduce){.flow{animation:none}.cur{animation:none}.no{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Buquê de flores em ASCII girando"></canvas>
+
+<section class="note" aria-live="polite">
+  <h1 class="ask" id="ask"></h1>
+  <div class="btns" id="btns">
+    <button class="yes" id="yes">sim</button>
+    <button class="no" id="no">não</button>
+  </div>
+  <p class="hint" id="hint"></p>
+  <div class="flow" id="flow" hidden></div>
+</section>
+
+<script>
+{
+/* ---------- texto do convite (edite aqui) ---------- */
+const ASK = 'Topa sair comigo?';
+const NO_TEXT = ['não', 'tem certeza?', 'pensa bem', 'olha as flores…', 'última chance'];
+
+/* ---------- geometria ---------- */
+let seed = 21;
+const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const uni = (a, b) => a + (b - a) * rnd();
+const V = (x, y, z) => [x, y, z];
+const ad = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sb = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const sc = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const cr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const nm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return sc(a, 1 / l); };
+const lin = (a, b, n) => Array.from({ length: n }, (_, i) => a + (b - a) * i / (n - 1));
+const TAU = Math.PI * 2;
+const basis = ax => { const h = Math.abs(ax[1]) < .9 ? V(0, 1, 0) : V(1, 0, 0); const u = nm(cr(h, ax)); return [u, cr(ax, u)]; };
+const shade = (c, k) => c.map(x => Math.max(0, Math.min(255, x * k)));
+
+const PINK = [255, 120, 190], RED = [235, 40, 50], PURPLE = [175, 90, 235], YELLOW = [255, 210, 40],
+  ORANGE = [255, 130, 30], WHITE = [245, 245, 250], GOLD = [255, 200, 40], DARK = [90, 45, 20],
+  STEM = [70, 160, 60], LEAF = [60, 185, 70], VEIN = [150, 235, 120], WRAP = [225, 228, 240], RIB = [255, 110, 170];
+const FLOWERS = [[PINK, GOLD, 7, 'cosmos'], [WHITE, GOLD, 13, 'daisy'], [RED, DARK, 6, 'tulip'], [PURPLE, GOLD, 7, 'cosmos'],
+  [YELLOW, DARK, 12, 'daisy'], [ORANGE, DARK, 8, 'cosmos'], [PINK, GOLD, 6, 'tulip'], [WHITE, DARK, 14, 'daisy'],
+  [YELLOW, GOLD, 6, 'tulip'], [RED, GOLD, 8, 'cosmos'], [PURPLE, DARK, 12, 'daisy']];
+
+const P = [], N = [], C = [], TW = [];
+const add = (p, n, c, two = 1) => { P.push(...p); N.push(...nm(n)); C.push(c[0] | 0, c[1] | 0, c[2] | 0); TW.push(two); };
+
+function flat(head, axis, petal, center, np, kind) {
+  const [e1, e2] = basis(axis);
+  const R = kind === 'cosmos' ? .26 : .23, width = kind === 'cosmos' ? .3 : .11, cup = kind === 'cosmos' ? .25 : .08;
+  const off = uni(0, TAU);
+  for (let k = 0; k < np; k++) {
+    const th = off + TAU * k / np + uni(-.08, .08);
+    const u = ad(sc(e1, Math.cos(th)), sc(e2, Math.sin(th))), v = ad(sc(e1, -Math.sin(th)), sc(e2, Math.cos(th)));
+    const droop = uni(-.05, .12);
+    for (const r of lin(.18, 1, 16)) {
+      const hw = width * Math.sin(Math.PI * Math.min(r, .97)) ** .7, lift = cup * r * r - droop * r ** 3;
+      for (const t of lin(-1, 1, 9)) {
+        const p = ad(ad(head, sc(ad(sc(u, r), sc(v, t * hw)), R)), sc(axis, R * lift));
+        const n = ad(sb(axis, sc(u, 2 * cup * r * .6)), sc(v, t * .6));
+        add(p, n, shade(petal, .55 + .55 * r - .25 * t * t));
+      }
+    }
+  }
+  const rc = R * (kind === 'cosmos' ? .28 : .34);
+  for (const rr of lin(0, 1, 7)) {
+    const m = Math.floor(6 + 26 * rr);
+    for (let j = 0; j < m; j++) {
+      const a = TAU * j / m, d = ad(sc(e1, Math.cos(a)), sc(e2, Math.sin(a))), h = .5 * Math.sqrt(Math.max(0, 1 - rr * rr));
+      add(ad(head, sc(ad(sc(d, rr), sc(axis, h + .25)), rc)), ad(sc(axis, h), sc(d, rr)), shade(center, .8 + .4 * rnd()), 0);
+    }
+  }
+}
+function tulip(head, axis, petal) {
+  const [e1, e2] = basis(axis), Rt = .15, Ht = .26, base = sb(head, sc(axis, .06)), off = uni(0, TAU);
+  for (const s of lin(0, 1.15, 26)) for (let j = 0; j < 56; j++) {
+    const a = TAU * j / 56, top = 1 + .15 * Math.abs(Math.cos(1.5 * (a + off)));
+    if (s > top) continue;
+    const rho = Rt * Math.sin(Math.PI * .5 * Math.min(s / .6, 1)) ** .6 * (1 - .25 * Math.max(0, s - .6));
+    const d = ad(sc(e1, Math.cos(a)), sc(e2, Math.sin(a)));
+    const seam = .85 + .15 * Math.abs(Math.cos(1.5 * (a + off)));
+    add(ad(ad(base, sc(axis, Ht * s)), sc(d, rho)), ad(d, sc(axis, .2)), shade(petal, seam * (.75 + .35 * s)), 0);
+  }
+}
+function stem(a, b, mid) {
+  for (const t of lin(0, 1, 140)) {
+    const p = ad(ad(sc(a, (1 - t) ** 2), sc(mid, 2 * (1 - t) * t)), sc(b, t * t));
+    const tan = nm(ad(sc(sb(mid, a), 2 * (1 - t)), sc(sb(b, mid), 2 * t))), [e1, e2] = basis(tan);
+    for (let k = 0; k < 4; k++) { const d = ad(sc(e1, Math.cos(k * Math.PI / 2)), sc(e2, Math.sin(k * Math.PI / 2))); add(ad(p, sc(d, .008)), d, STEM, 0); }
+  }
+}
+function leaf(base, dir, len) {
+  dir = nm(dir); const side = nm(cr(dir, [0, 1, 0])), up = nm(cr(side, dir));
+  for (const s of lin(0, 1, 40)) {
+    const w = .075 * Math.sin(Math.PI * s) ** .9 * len / .4, c = ad(ad(base, sc(dir, len * s)), [0, -.12 * s * s, 0]);
+    for (const t of lin(-1, 1, 11))
+      add(ad(ad(c, sc(side, w * t)), sc(up, .02 * (1 - t * t))), ad(up, sc(side, t * .4)), Math.abs(t) < .12 ? VEIN : shade(LEAF, .8 + .2 * (1 - Math.abs(t))));
+  }
+}
+(function build() {
+  const neck = V(0, -.12, 0), Cc = V(0, .2, 0), R = .74, n = FLOWERS.length, golden = Math.PI * (3 - Math.sqrt(5));
+  FLOWERS.forEach(([petal, center, np, kind], i) => {
+    const el = (72 - 56 * Math.sqrt(i / (n - 1))) * Math.PI / 180, az = i * golden;
+    const d = V(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az));
+    const head = ad(Cc, sc(d, R * uni(.92, 1.05))), axis = nm(ad(d, [0, .45, 0]));
+    kind === 'tulip' ? tulip(head, axis, petal) : flat(head, axis, petal, center, np, kind);
+    const end = V(uni(-.05, .05), -1.08, uni(-.05, .05)), h0 = sb(head, sc(axis, .05));
+    stem(h0, neck, sb(sc(ad(head, neck), .5), sc(axis, .05)));
+    stem(neck, end, sc(ad(neck, end), .5));
+  });
+  for (let k = 0; k < 7; k++) {
+    const a = k * TAU / 7 + .3;
+    leaf(ad([0, -.02, 0], sc(nm([Math.cos(a), 0, Math.sin(a)]), .28)), [Math.cos(a), uni(.35, .6), Math.sin(a)], uni(.32, .45));
+  }
+  const yT = .05, yB = -.78, rT = .36, rB = .045, slope = (rT - rB) / (yT - yB);
+  for (const s of lin(0, 1, 70)) for (let j = 0; j < 150; j++) {
+    const a = TAU * j / 150, y = yB + (yT - yB) * s + .06 * Math.sin(5 * a) * s ** 6, r = rB + (rT - rB) * s;
+    const d = [Math.cos(a), 0, Math.sin(a)];
+    add([d[0] * r, y, d[2] * r], [d[0], -slope, d[2]], shade(WRAP, .82 + .18 * Math.cos(9 * a)));
+  }
+  const yr = -.6, rc = rB + (rT - rB) * ((yr - yB) / (yT - yB));
+  for (let j = 0; j < 160; j++) for (let q = 0; q < 10; q++) {
+    const a = TAU * j / 160, b = TAU * q / 10, d = [Math.cos(a), 0, Math.sin(a)], rr = rc + .025 + .022 * Math.cos(b);
+    add([d[0] * rr, yr + .03 * Math.sin(b), d[2] * rr], [d[0] * Math.cos(b), Math.sin(b), d[2] * Math.cos(b)], RIB, 0);
+  }
+  const fr = [0, yr, -(rc + .04)];
+  for (const sg of [-1, 1]) {
+    for (const t of lin(0, TAU, 90)) for (const w of lin(-1, 1, 5))
+      add(ad(fr, [sg * (.08 + .08 * Math.cos(t)), .05 * Math.sin(t) + .012 * w, -.02]), [0, 0, -1], shade(RIB, .9 + .1 * w));
+    for (const s of lin(0, 1, 30)) for (const w of lin(-1, 1, 5))
+      add(ad(fr, [sg * (.03 + .06 * s) + .012 * w, -.16 * s, -.02]), [0, 0, -1], shade(RIB, .85));
+  }
+})();
+const NP = TW.length, Pf = new Float32Array(P), Nf = new Float32Array(N), Cu = new Uint8Array(C), Tw = new Uint8Array(TW);
+
+/* ---------- render ---------- */
+const RAMP = '.,-~:;=!*#$@';
+const L = nm([-.4, .4, -.82]);
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W, H, dpr, cw, ch, cols, rows, S, cx, cy, depth, cell, stars = [];
+function resize() {
+  dpr = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const area = H * (W < 700 ? .6 : .66);
+  S = Math.min(area / 2.3, W * .5);
+  ch = Math.max(7, Math.min(14, S * 2.35 / 60)); cw = ch * .6;
+  cols = Math.ceil(W / cw); rows = Math.ceil(H / ch);
+  cx = W / 2; cy = Math.max(area * .5 + 8, (H - 330) / 2 + 10);
+  depth = new Float32Array(cols * rows); cell = new Int32Array(cols * rows);
+  stars = Array.from({ length: Math.round(W * H / 6000) }, () => [Math.random() * W, Math.random() * H * .8, Math.random() * TAU, 1.5 + Math.random() * 2.5]);
+}
+addEventListener('resize', resize); resize();
+
+let spin = 0, boost = 0, last = performance.now(), view = 0, viewT = 0;
+const parts = [];
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  const t = now / 1000;
+  boost *= Math.pow(.25, dt);
+  spin += dt * ((reduce ? .12 : .4) + boost);
+  const yaw = spin, pitch = -.42 + .05 * Math.sin(t * .7), roll = reduce ? 0 : .06 * Math.sin(t * 1.3);
+  const cyw = Math.cos(yaw), syw = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), crr = Math.cos(roll), sr = Math.sin(roll);
+  // M = Rz * Rx * Ry
+  const a00 = cyw, a01 = 0, a02 = syw, a10 = sp * syw, a11 = cp, a12 = -sp * cyw, a20 = -cp * syw, a21 = sp, a22 = cp * cyw;
+  const m00 = crr * a00 - sr * a10, m01 = crr * a01 - sr * a11, m02 = crr * a02 - sr * a12;
+  const m10 = sr * a00 + crr * a10, m11 = sr * a01 + crr * a11, m12 = sr * a02 + crr * a12;
+  const m20 = a20, m21 = a21, m22 = a22;
+
+  depth.fill(1e9);
+  const Se = S * (1 - .45 * view), cye = cy * (1 - view) + Math.max(Se * 1.25, H * .14) * view;
+  for (let i = 0; i < NP; i++) {
+    const j = i * 3, x = Pf[j], y = Pf[j + 1], z = Pf[j + 2];
+    const rz = m20 * x + m21 * y + m22 * z, f = 4 / (4 + rz);
+    const px = cx + (m00 * x + m01 * y + m02 * z) * Se * f, py = cye - ((m10 * x + m11 * y + m12 * z) - .03) * Se * f;
+    const c = (px / cw) | 0, r = (py / ch) | 0;
+    if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+    const k = r * cols + c;
+    if (rz < depth[k]) { depth[k] = rz; cell[k] = i; }
+  }
+  ctx.clearRect(0, 0, W, H);
+  ctx.font = `700 ${ch}px "JetBrains Mono", monospace`; ctx.textBaseline = 'top';
+  for (const [sx, sy, ph, spd] of stars) {
+    const v = Math.sin(t * spd + ph); if (v < .3) continue;
+    const k = Math.floor(sy / ch) * cols + Math.floor(sx / cw); if (depth[k] < 1e9) continue;
+    const g = 140 + 115 * v | 0; ctx.fillStyle = `rgb(${g},${g},${Math.min(255, g + 30)})`;
+    ctx.fillText(v > .9 ? '*' : v > .7 ? '+' : '.', sx, sy);
+  }
+  for (let k = 0; k < depth.length; k++) {
+    if (depth[k] > 1e8) continue;
+    const i = cell[k], j = i * 3;
+    const nx = m00 * Nf[j] + m01 * Nf[j + 1] + m02 * Nf[j + 2], ny = m10 * Nf[j] + m11 * Nf[j + 1] + m12 * Nf[j + 2], nz = m20 * Nf[j] + m21 * Nf[j + 1] + m22 * Nf[j + 2];
+    let d = nx * L[0] + ny * L[1] + nz * L[2];
+    d = Tw[i] ? Math.abs(d) : Math.max(0, d);
+    const lum = .35 + .65 * d, q = .5 + .6 * lum;
+    ctx.fillStyle = `rgb(${Math.min(255, Cu[j] * q) | 0},${Math.min(255, Cu[j + 1] * q) | 0},${Math.min(255, Cu[j + 2] * q) | 0})`;
+    ctx.fillText(RAMP[Math.min(11, lum * 11 | 0)], (k % cols) * cw, ((k / cols) | 0) * ch);
+  }
+  view += (viewT - view) * Math.min(1, dt * 2.5);
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 30 * dt; p.life -= dt;
+    if (p.life <= 0) { parts.splice(i, 1); continue; }
+    ctx.globalAlpha = Math.min(1, p.life); ctx.fillStyle = p.c;
+    ctx.font = `700 ${p.s}px "JetBrains Mono", monospace`; ctx.fillText(p.ch, p.x, p.y);
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- convite ---------- */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, reduce ? 0 : ms));
+async function type(el, html, speed = 38) {
+  const tmp = document.createElement('div'); tmp.innerHTML = html;
+  const text = tmp.textContent, prefixLen = html.startsWith('<span') ? 1 : 0;
+  const cur = '<span class="cur"></span>';
+  for (let i = 1; i <= text.length; i++) {
+    const shown = text.slice(0, i);
+    el.innerHTML = (prefixLen ? '<span class="p">' + shown.slice(0, 1) + '</span>' + esc(shown.slice(1)) : esc(shown)) + cur;
+    await sleep(speed + (/[.,?]/.test(text[i - 1]) ? 180 : 0));
+  }
+  el.innerHTML = html;
+}
+const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+async function intro() {
+  await sleep(900);
+  await type($('ask'), ASK, 70);
+  $('ask').insertAdjacentHTML('beforeend', '<span class="cur"></span>');
+  $('btns').classList.add('on');
+}
+intro();
+
+let tries = 0;
+const no = $('no');
+function flee(e) {
+  if (e) e.preventDefault();
+  tries++;
+  if (tries >= NO_TEXT.length) { no.textContent = 'tá bom, sim'; no.onclick = accept; no.removeEventListener('pointerdown', flee); return; }
+  const r = no.getBoundingClientRect();
+  if (!no.classList.contains('run')) { no.style.left = r.left + 'px'; no.style.top = r.top + 'px'; no.classList.add('run'); no.offsetWidth; }
+  no.textContent = NO_TEXT[tries];
+  const bw = no.offsetWidth, bh = no.offsetHeight, pad = 16;
+  no.style.left = pad + Math.random() * (innerWidth - bw - pad * 2) + 'px';
+  no.style.top = pad + Math.random() * (innerHeight * .55 - bh) + 'px';
+  $('hint').textContent = tries > 2 ? 'esse botão tá meio tímido…' : '';
+}
+no.addEventListener('pointerdown', flee);
+no.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') flee(e); });
+
+let done = false;
+async function accept() {
+  if (done) return; done = true;
+  boost = 6;
+  const cols2 = ['#ff6eaa', '#ffb3d1', '#ffd23f', '#ffffff', '#b38bff'];
+  for (let i = 0; i < 90; i++) parts.push({
+    x: cx + (Math.random() - .5) * S * 1.4, y: cy + (Math.random() - .3) * S,
+    vx: (Math.random() - .5) * 120, vy: -60 - Math.random() * 160, life: 2 + Math.random() * 2,
+    ch: '♥*✿+'[Math.random() * 4 | 0], c: cols2[Math.random() * 5 | 0], s: 12 + Math.random() * 14
+  });
+  no.style.display = 'none';
+  startFlow();
+}
+$('yes').addEventListener('click', accept);
+
+/* ---------- marcar: horário → lugar → mensagem ---------- */
+const CONFIG = {
+  supabaseUrl: 'COLE_AQUI_A_URL',          // ex: https://abcd1234.supabase.co
+  supabaseKey: 'COLE_AQUI_A_CHAVE_PUBLICA' // anon / publishable key (nunca a service_role)
+};
+const DAY = 'sexta, 27/11';
+const TIMES = ['19:00', '20:00', '21:00'];
+const PLACES = [
+  { id: 'josephine', name: 'Josephine', tag: 'contemporânea · brasileira, italiana e francesa' },
+  { id: 'view', name: 'The View', tag: 'drinks e petiscos' },
+  { id: 'balcone', name: 'Balcone', tag: 'italiana · massas artesanais' },
+  { id: 'braz', name: 'Bráz Quintal', tag: 'pizzaria' }
+];
+const st = { time: null, place: null };
+const flow = $('flow');
+const placeLabel = () => (PLACES.find(x => x.id === st.place) || {}).name || '';
+
+function startFlow() {
+  viewT = 1;
+  document.querySelector('.note').classList.add('sheet');
+  for (const id of ['ask', 'btns', 'hint']) $(id).style.display = 'none';
+  flow.style.marginTop = '0';
+  flow.hidden = false;
+  stepTime();
+}
+function show(html) { flow.innerHTML = html; flow.style.animation = 'none'; flow.offsetWidth; flow.style.animation = ''; document.querySelector('.note').scrollTop = 0; }
+
+function stepTime() {
+  show(`<h2 class="h2">Sexta, 27/11. Que horas fica bom?</h2>
+    <div class="chips" role="group" aria-label="Horários">${TIMES.map(t => `<button class="chip" data-t="${t}" aria-pressed="${st.time === t}">${t}</button>`).join('')}</div>
+    <div class="row"><button class="yes" id="go1" ${st.time ? '' : 'disabled'}>continuar</button></div>`);
+  flow.querySelectorAll('.chip').forEach(b => b.onclick = () => {
+    st.time = b.dataset.t;
+    flow.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === b));
+    $('go1').disabled = false;
+  });
+  $('go1').onclick = stepPlace;
+}
+
+function stepPlace() {
+  show(`<p class="k">Sexta, 27/11 · ${st.time}</p>
+    <h2 class="h2">E onde a gente vai?</h2>
+    ${PLACES.map(p => `<button class="place ph" data-p="${p.id}" aria-pressed="${st.place === p.id}"><span><strong>${p.name}</strong><small>${p.tag}</small></span></button>`).join('')}
+    <div class="row"><button class="yes" id="go2" ${st.place ? '' : 'disabled'}>confirmar</button></div>
+    <button class="linkbtn" id="back1">← trocar horário</button>`);
+  flow.querySelectorAll('.place').forEach(b => b.onclick = () => {
+    st.place = b.dataset.p;
+    flow.querySelectorAll('.place').forEach(c => c.setAttribute('aria-pressed', c === b));
+    $('go2').disabled = false;
+  });
+  $('go2').onclick = () => { boost = 3; stepDone(); };
+  $('back1').onclick = stepTime;
+}
+
+async function save() {
+  const headers = { apikey: CONFIG.supabaseKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' };
+  if (CONFIG.supabaseKey.startsWith('eyJ')) headers.Authorization = 'Bearer ' + CONFIG.supabaseKey;
+  const r = await fetch(CONFIG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/respostas', {
+    method: 'POST', headers,
+    body: JSON.stringify({ dia: '2026-11-27', horario: st.time, lugar: placeLabel(), tentativas_nao: tries })
+  });
+  if (!r.ok) throw new Error(r.status);
+}
+
+async function stepDone() {
+  show(`<h2 class="h2">Só um segundo…</h2>`);
+  try {
+    await save();
+    show(`<h2 class="h2">Então está marcado ♥</h2>
+      <p class="sum">Sexta, 27/11\n${st.time}\n${placeLabel()}</p>
+      <p class="small">Já fiquei sabendo. Te vejo lá.</p>`);
+    boost = 4; viewT = .35;
+  } catch (e) {
+    show(`<h2 class="h2">Ops, não salvou.</h2>
+      <p class="small">Deve ter sido a internet. Tenta de novo:</p>
+      <div class="row"><button class="yes" id="retry">tentar de novo</button></div>`);
+    $('retry').onclick = stepDone;
+  }
+}
+}
+</script>
+</body>
+</html>
